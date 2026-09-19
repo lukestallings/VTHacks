@@ -9,8 +9,8 @@
     "tabs"
   ],
   "host_permissions": [
-    "<all_urls>"
-  ],
+   "https://rdap.org/*"
+],
   "action": {
     "default_popup": "popup.html"
   }
