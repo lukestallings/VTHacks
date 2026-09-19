@@ -27,13 +27,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     activeTabId = tab.id;
 
-    if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://'))) {
-      headlineEl.innerText = "System Page";
-      riskBadge.innerText = "N/A";
-      riskBadge.className = "status-badge badge-warn";
-      scoreVal.innerText = "--/100";
-      domainList.innerHTML = `<li class="signal-item"><span class="signal-icon">ℹ️</span><span>Cannot evaluate browser internal tabs.</span></li>`;
-      contentList.innerHTML = `<li class="signal-item"><span class="signal-icon">ℹ️</span><span>Open a live website or article.</span></li>`;
+    if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('edge://'))) {
+      if (headlineEl) headlineEl.innerText = "System Page";
+      if (riskBadge) {
+        riskBadge.innerText = "N/A";
+        riskBadge.className = "status-badge badge-warn";
+      }
+      if (scoreVal) scoreVal.innerText = "--/100";
+      if (domainList) domainList.innerHTML = `<li class="signal-item"><span class="signal-icon">ℹ️</span><span>Cannot evaluate browser internal tabs.</span></li>`;
+      if (contentList) contentList.innerHTML = `<li class="signal-item"><span class="signal-icon">ℹ️</span><span>Open a live website or article.</span></li>`;
       return;
     }
 
@@ -44,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       if (!results || !results[0] || !results[0].result) {
-        headlineEl.innerText = "Cannot Read Content";
+        if (headlineEl) headlineEl.innerText = "Cannot Read Content";
         return;
       }
 
@@ -53,76 +55,116 @@ document.addEventListener('DOMContentLoaded', () => {
       flaggedWords = evaluation.matchedWords;
 
       // Update Headline
-      if (data.headline && data.headline.length > 0) {
-        headlineEl.innerText = data.headline.length > 32 
-          ? data.headline.substring(0, 32) + "..." 
-          : data.headline;
-      } else {
-        headlineEl.innerText = "Page Analyzed";
+      if (headlineEl) {
+        if (data.headline && data.headline.length > 0) {
+          headlineEl.innerText = data.headline.length > 32 
+            ? data.headline.substring(0, 32) + "..." 
+            : data.headline;
+        } else {
+          headlineEl.innerText = "Page Analyzed";
+        }
       }
 
       // Update Score & Bar
-      scoreVal.innerText = `${evaluation.finalScore}/100`;
-      scoreBar.style.width = `${evaluation.finalScore}%`;
+      if (scoreVal) scoreVal.innerText = `${evaluation.finalScore}/100`;
+      if (scoreBar) {
+        scoreBar.style.width = `${evaluation.finalScore}%`;
+        if (evaluation.finalScore >= 75) {
+          scoreBar.style.backgroundColor = "#16a34a";
+        } else if (evaluation.finalScore >= 50) {
+          scoreBar.style.backgroundColor = "#d97706";
+        } else {
+          scoreBar.style.backgroundColor = "#dc2626";
+        }
+      }
 
-      // Update Badge and colors
-      if (evaluation.finalScore >= 75) {
-        riskBadge.innerText = "LOW RISK";
-        riskBadge.className = "status-badge badge-good";
-        scoreBar.style.backgroundColor = "#16a34a";
-      } else if (evaluation.finalScore >= 50) {
-        riskBadge.innerText = "MODERATE";
-        riskBadge.className = "status-badge badge-warn";
-        scoreBar.style.backgroundColor = "#d97706";
-      } else {
-        riskBadge.innerText = "HIGH RISK";
-        riskBadge.className = "status-badge badge-bad";
-        scoreBar.style.backgroundColor = "#dc2626";
+      // Update Badge
+      if (riskBadge) {
+        if (evaluation.finalScore >= 75) {
+          riskBadge.innerText = "LOW RISK";
+          riskBadge.className = "status-badge badge-good";
+        } else if (evaluation.finalScore >= 50) {
+          riskBadge.innerText = "MODERATE";
+          riskBadge.className = "status-badge badge-warn";
+        } else {
+          riskBadge.innerText = "HIGH RISK";
+          riskBadge.className = "status-badge badge-bad";
+        }
       }
 
       // Render Dynamic Domain Signals
-      domainList.innerHTML = evaluation.domainSignals.map(s => `
-        <li class="signal-item">
-          <span class="signal-icon">${s.icon}</span>
-          <span>${s.text}</span>
-        </li>
-      `).join('');
+      if (domainList) {
+        domainList.innerHTML = evaluation.domainSignals.map(s => `
+          <li class="signal-item">
+            <span class="signal-icon">${s.icon}</span>
+            <span>${s.text}</span>
+          </li>
+        `).join('');
+      }
 
       // Render Dynamic Content Signals
-      contentList.innerHTML = evaluation.contentSignals.map(s => `
-        <li class="signal-item">
-          <span class="signal-icon">${s.icon}</span>
-          <span>${s.text}</span>
-        </li>
-      `).join('');
+      if (contentList) {
+        contentList.innerHTML = evaluation.contentSignals.map(s => `
+          <li class="signal-item">
+            <span class="signal-icon">${s.icon}</span>
+            <span>${s.text}</span>
+          </li>
+        `).join('');
+      }
 
     } catch (err) {
       console.error(err);
-      headlineEl.innerText = "Scan Failed";
+      if (headlineEl) headlineEl.innerText = "Scan Failed";
     }
   }
 
-  // Highlight Button Event
-  highlightBtn.addEventListener('click', async () => {
-    if (!activeTabId || flaggedWords.length === 0) return;
-    try {
-      await chrome.tabs.sendMessage(activeTabId, {
-        action: "HIGHLIGHT_WORDS",
-        words: flaggedWords
-      });
-    } catch (e) {
-      await chrome.scripting.executeScript({
-        target: { tabId: activeTabId },
-        files: ['content.js']
-      });
-      chrome.tabs.sendMessage(activeTabId, {
-        action: "HIGHLIGHT_WORDS",
-        words: flaggedWords
-      });
-    }
-  });
+  // Highlight Button Event with direct file injection and UI feedback
+  if (highlightBtn) {
+    highlightBtn.addEventListener('click', async () => {
+      const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      if (!tab || !tab.id) return;
 
-  reanalyzeBtn.addEventListener('click', runScan);
+      if (!flaggedWords || flaggedWords.length === 0) {
+        highlightBtn.innerText = "No Flags Found!";
+        setTimeout(() => { highlightBtn.innerText = "Inspect Highlights"; }, 1500);
+        return;
+      }
+
+      highlightBtn.innerText = "Highlighting...";
+
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content.js']
+        });
+
+        chrome.tabs.sendMessage(tab.id, {
+          action: "HIGHLIGHT_WORDS",
+          words: flaggedWords
+        }, () => {
+          highlightBtn.innerText = "Highlights Applied!";
+          setTimeout(() => { highlightBtn.innerText = "Inspect Highlights"; }, 1500);
+        });
+      } catch (e) {
+        console.error("Highlight error:", e);
+        highlightBtn.innerText = "Error Highlighting";
+        setTimeout(() => { highlightBtn.innerText = "Inspect Highlights"; }, 1500);
+      }
+    });
+  }
+
+  // Re-Analyze Button with Visual Feedback
+  if (reanalyzeBtn) {
+    reanalyzeBtn.addEventListener('click', async () => {
+      reanalyzeBtn.innerText = "Scanning...";
+      reanalyzeBtn.disabled = true;
+      await runScan();
+      setTimeout(() => {
+        reanalyzeBtn.innerText = "Re-Analyze";
+        reanalyzeBtn.disabled = false;
+      }, 400);
+    });
+  }
 
   // Run automatically when popup opens
   runScan();
