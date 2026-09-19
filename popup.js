@@ -138,6 +138,36 @@ document.addEventListener('DOMContentLoaded', () => {
       if (headlineEl) headlineEl.innerText = "Scan Failed";
     }
   }
+  async function getDomainAgeInDays(hostname) {
+  try {
+    // Strip subdomains to find root domain (e.g., "news.example.com" -> "example.com")
+    const parts = hostname.split('.');
+    const rootDomain = parts.length > 2 ? parts.slice(-2).join('.') : hostname;
+
+    // RDAP public gateway (free, no API key required)
+    const response = await fetch(`https://rdap.org/domain/${rootDomain}`, { cache: "force-cache" });
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    
+    // RDAP stores event dates in an events array
+    const registrationEvent = data.events?.find(e => 
+      e.eventAction === "registration" || e.eventAction === "last changed"
+    );
+
+    if (!registrationEvent || !registrationEvent.eventDate) return null;
+
+    const regDate = new Date(registrationEvent.eventDate);
+    const now = new Date();
+    const diffTime = Math.abs(now - regDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays;
+  } catch (err) {
+    console.warn("RDAP lookup failed:", err);
+    return null;
+  }
+}
 
   // Highlight Button Event
   if (highlightBtn) {
