@@ -259,26 +259,79 @@ function scrapePageData() {
   };
 }
 
+// Levenshtein distance for typosquatting detection
+function levenshteinDistance(a, b) {
+  const dp = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      if (a[i - 1] === b[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1];
+      } else {
+        dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      }
+    }
+  }
+  return dp[a.length][b.length];
+}
+
+function checkTyposquatting(currentDomain, trustedList) {
+  const parts = currentDomain.split('.');
+  const root = parts.length > 2 ? parts.slice(-2).join('.') : currentDomain;
+  const rootName = root.split('.')[0]; // e.g. "reutrs" from "reutrs.com"
+
+  for (const trusted of trustedList) {
+    if (root === trusted || currentDomain.endsWith('.' + trusted)) {
+      return null; // Legitimate exact match
+    }
+
+    const trustedName = trusted.split('.')[0];
+
+    // 1. Edit distance check (1 or 2 typos on names with >= 4 characters)
+    if (trustedName.length >= 4) {
+      const dist = levenshteinDistance(rootName, trustedName);
+      if (dist >= 1 && dist <= 2) {
+        return { type: "misspelling", target: trusted };
+      }
+    }
+
+    // 2. Deceptive embedding check (e.g. bbc-breaking-news.com or nytimes-updates.com)
+    if (rootName.includes(trustedName) && rootName !== trustedName) {
+      return { type: "deceptive_name", target: trusted };
+    }
+  }
+
+  return null;
+}
+
 function evaluateContent(data, sensationalWords) {
   let score = 70;
   const domainSignals = [];
   const contentSignals = [];
 
-  // 1. Domain Check
   const TRUSTED_DOMAINS = [
     "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk", "npr.org", 
     "wsj.com", "nytimes.com", "theguardian.com", "wikipedia.org", "nature.com"
   ];
   const SUSPICIOUS_TLDS = [".xyz", ".top", ".info", ".buzz", ".click", ".news"];
 
-  // Check for official government domains (.gov or international .gov.* e.g. .gov.uk)
   const isGov = data.hostname.endsWith('.gov') || data.hostname.includes('.gov.');
-  const isTrusted = TRUSTED_DOMAINS.some(domain => data.hostname.includes(domain));
+  const isTrusted = TRUSTED_DOMAINS.some(domain => data.hostname === domain || data.hostname.endsWith('.' + domain));
   const hasSuspiciousTLD = SUSPICIOUS_TLDS.some(tld => data.hostname.endsWith(tld));
+  const typosquatMatch = checkTyposquatting(data.hostname, TRUSTED_DOMAINS);
 
+  // 1. Domain Evaluation
   if (isGov) {
     score += 25;
     domainSignals.push({ icon: "🏛️", text: "Verified official government domain (.gov)" });
+  } else if (typosquatMatch) {
+    score -= 40; // Critical warning
+    domainSignals.push({ 
+      icon: "🚨", 
+      text: `Potential typosquatting impersonating ${typosquatMatch.target}` 
+    });
   } else if (isTrusted) {
     score += 15;
     domainSignals.push({ icon: "✅", text: "Recognized legitimate news outlet" });
