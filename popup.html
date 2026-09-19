@@ -2,157 +2,71 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>NewsShield Analysis</title>
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
-    body {
-      width: 320px;
-      padding: 16px;
-      background: #f8fafc;
-      color: #0f172a;
-    }
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-    h1 {
-      font-size: 16px;
-      font-weight: 700;
-      color: #1e293b;
-    }
-    .status-pill {
-      font-size: 11px;
-      font-weight: 600;
-      padding: 2px 8px;
-      border-radius: 9999px;
-      background: #e2e8f0;
-      color: #475569;
-    }
-    .pill-good { background: #dcfce7; color: #15803d; }
-    .pill-warn { background: #fef9c3; color: #a16207; }
-    .pill-bad  { background: #fee2e2; color: #b91c1c; }
-
-    .score-card {
-      background: white;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      padding: 14px;
-      text-align: center;
-      margin-bottom: 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    .score-number {
-      font-size: 32px;
-      font-weight: 800;
-      color: #334155;
-    }
-    .score-label {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #64748b;
-      margin-top: 2px;
-    }
-
-    button {
-      width: 100%;
-      padding: 10px;
-      font-size: 13px;
-      font-weight: 600;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      margin-bottom: 8px;
-      transition: background 0.15s;
-    }
-    #analyzeBtn {
-      background: #2563eb;
-      color: white;
-    }
-    #analyzeBtn:hover { background: #1d4ed8; }
-    #analyzeBtn:disabled { opacity: 0.6; cursor: not-allowed; }
-
-    #highlightBtn {
-      background: #f1f5f9;
-      color: #334155;
-      border: 1px solid #cbd5e1;
-    }
-    #highlightBtn:hover { background: #e2e8f0; }
-    #highlightBtn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .status-text {
-      font-size: 11px;
-      color: #64748b;
-      text-align: center;
-      margin-bottom: 12px;
-      min-height: 16px;
-    }
-
-    /* Score Breakdown Dropdown */
-    details {
-      background: white;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      font-size: 12px;
-      margin-top: 8px;
-      overflow: hidden;
-    }
-    summary {
-      padding: 8px 12px;
-      font-weight: 600;
-      cursor: pointer;
-      background: #f8fafc;
-      color: #334155;
-      user-select: none;
-    }
-    summary:hover { background: #f1f5f9; }
-    .breakdown-list {
-      padding: 8px 12px;
-      list-style: none;
-    }
-    .breakdown-item {
-      display: flex;
-      justify-content: space-between;
-      padding: 4px 0;
-      border-bottom: 1px solid #f1f5f9;
-      color: #475569;
-    }
-    .breakdown-item:last-child { border-bottom: none; }
-    .deduction { font-weight: 600; }
-    .deduction.neg { color: #dc2626; }
-    .deduction.pos { color: #16a34a; }
-  </style>
+  <title>Klarity Nutrition Label</title>
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <header>
-    <h1>NewsShield</h1>
-    <span id="riskBadge" class="status-pill">Ready</span>
-  </header>
+  <div class="card">
+    
+    <!-- REDESIGNED HEADER -->
+    <header class="header">
+      <div class="analysis-brand-bar">
+        <div class="logo-and-site">
+          <!-- Klarity Shield Logo -->
+          <svg class="klarity-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="36" height="36">
+            <defs>
+              <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#00C4CC;stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#3969E7;stop-opacity:1" />
+              </linearGradient>
+            </defs>
+            <path d="M250 60 L100 120 V250 C100 360 160 430 250 470 C340 430 400 360 400 250 V120 Z" fill="url(#shieldGrad)" />
+            <path d="M200 180 V350 M200 265 L290 180 M240 225 L300 350" stroke="#ffffff" stroke-width="40" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+          </svg>
+          
+          <div class="site-title-group">
+            <span class="klarity-brand-text">Klarity Analysis</span>
+            <!-- This will be dynamically updated by JavaScript -->
+            <h1 id="current-website">Loading...</h1>
+          </div>
+        </div>
+        <span class="badge danger">High Risk</span>
+      </div>
+    </header>
 
-  <div class="score-card">
-    <div id="scoreBox" class="score-number">--</div>
-    <div class="score-label">Credibility Score</div>
+    <div class="meter-section">
+      <div class="meter-label">
+        <span>Credibility Score</span>
+        <span>24/100</span>
+      </div>
+      <div class="meter-bar">
+        <div class="meter-fill danger-fill" style="width: 24%;"></div>
+      </div>
+    </div>
+
+    <div class="signals-container">
+      <section class="signal-group">
+        <h2>Domain & Site Signals</h2>
+        <ul class="signal-list">
+          <li class="flag-item">Domain age &lt; 1 year (WHOIS check failed)</li>
+          <li class="flag-item">Domain name mimics a legitimate outlet (typosquatting)</li>
+        </ul>
+      </section>
+
+      <section class="signal-group">
+        <h2>Content Analysis</h2>
+        <ul class="signal-list">
+          <li class="flag-item">Excessive/emotionally loaded language (e.g., "SHOCKING")</li>
+          <li class="flag-item">No cited sources (citation laundering loop detected)</li>
+        </ul>
+      </section>
+    </div>
+
+    <footer class="footer">
+      <button class="action-btn" id="inspect-btn">Inspect Highlights</button>
+      <button class="action-btn secondary" id="details-btn">View Full Report</button>
+    </footer>
   </div>
-
-  <button id="analyzeBtn">Analyze Page</button>
-  <button id="highlightBtn" disabled>Highlight Flags on Page</button>
-  <div id="status" class="status-text">Click analyze to evaluate article.</div>
-
-  <details id="breakdownSection">
-    <summary>Score Breakdown</summary>
-    <ul class="breakdown-list" id="breakdownList">
-      <li class="breakdown-item"><span>Base Score</span><span class="deduction">100</span></li>
-      <li class="breakdown-item"><span>Run analysis to see breakdown</span><span class="deduction">--</span></li>
-    </ul>
-  </details>
-
   <script src="popup.js"></script>
 </body>
 </html>
