@@ -1,13 +1,15 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const analyzeBtn = document.getElementById('analyzeBtn');
-  const highlightBtn = document.getElementById('highlightBtn');
-  const statusEl = document.getElementById('status');
-  const scoreBox = document.getElementById('scoreBox');
+  const headlineEl = document.getElementById('headline');
   const riskBadge = document.getElementById('riskBadge');
-  const breakdownList = document.getElementById('breakdownList');
+  const scoreVal = document.getElementById('scoreVal');
+  const scoreBar = document.getElementById('scoreBar');
+  const domainList = document.getElementById('domainSignals');
+  const contentList = document.getElementById('contentSignals');
+  const highlightBtn = document.getElementById('highlightBtn');
+  const reanalyzeBtn = document.getElementById('reanalyzeBtn');
 
-  let currentTabId = null;
-  let detectedKeywords = [];
+  let activeTabId = null;
+  let flaggedWords = [];
 
   const SENSATIONAL_WORDS = [
     "shocking", "unbelievable", "mind-blowing", "miracle", "secret",
@@ -17,142 +19,123 @@ document.addEventListener('DOMContentLoaded', () => {
     "urgent warning", "breaking alert", "censored"
   ];
 
-  if (!analyzeBtn) return;
-
-  analyzeBtn.addEventListener('click', async () => {
-    analyzeBtn.disabled = true;
-    analyzeBtn.innerText = "Analyzing...";
-    highlightBtn.disabled = true;
-    if (statusEl) statusEl.innerText = "Scanning content, metadata, and domain signals...";
-
+  async function runScan() {
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (!tab || !tab.id) {
-      if (statusEl) statusEl.innerText = "Cannot find active tab.";
-      resetButtons();
+      if (headlineEl) headlineEl.innerText = "No active tab found";
       return;
     }
-    currentTabId = tab.id;
+    activeTabId = tab.id;
 
-    if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('chrome-extension://'))) {
-      if (statusEl) statusEl.innerText = "Open a live web article first!";
-      resetButtons();
+    if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://'))) {
+      headlineEl.innerText = "System Page";
+      riskBadge.innerText = "N/A";
+      riskBadge.className = "status-badge badge-warn";
+      scoreVal.innerText = "--/100";
+      domainList.innerHTML = `<li class="signal-item"><span class="signal-icon">ℹ️</span><span>Cannot evaluate browser internal tabs.</span></li>`;
+      contentList.innerHTML = `<li class="signal-item"><span class="signal-icon">ℹ️</span><span>Open a live website or article.</span></li>`;
       return;
     }
 
     try {
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        func: scrapePageDirectly
+        func: scrapePageData
       });
 
-      if (!results || !results[0] || !results[0].result || !results[0].result.bodyText) {
-        if (statusEl) statusEl.innerText = "No readable article content found.";
-        resetButtons();
+      if (!results || !results[0] || !results[0].result) {
+        headlineEl.innerText = "Cannot Read Content";
         return;
       }
 
-      const pageData = results[0].result;
-      const evaluation = computeEvaluation(pageData, SENSATIONAL_WORDS);
-      detectedKeywords = evaluation.matchedWords;
+      const data = results[0].result;
+      const evaluation = evaluateContent(data, SENSATIONAL_WORDS);
+      flaggedWords = evaluation.matchedWords;
 
-      renderScore(evaluation);
-      renderBreakdown(evaluation.breakdown);
-
-      highlightBtn.disabled = detectedKeywords.length === 0;
-      if (statusEl) {
-        statusEl.innerText = detectedKeywords.length > 0 
-          ? `Analysis complete. Found ${detectedKeywords.length} flagged terms.` 
-          : "Analysis complete. Signals evaluated.";
+      // Update Headline
+      if (data.headline && data.headline.length > 0) {
+        headlineEl.innerText = data.headline.length > 32 
+          ? data.headline.substring(0, 32) + "..." 
+          : data.headline;
+      } else {
+        headlineEl.innerText = "Page Analyzed";
       }
+
+      // Update Score & Bar
+      scoreVal.innerText = `${evaluation.finalScore}/100`;
+      scoreBar.style.width = `${evaluation.finalScore}%`;
+
+      // Update Badge and colors
+      if (evaluation.finalScore >= 75) {
+        riskBadge.innerText = "LOW RISK";
+        riskBadge.className = "status-badge badge-good";
+        scoreBar.style.backgroundColor = "#16a34a";
+      } else if (evaluation.finalScore >= 50) {
+        riskBadge.innerText = "MODERATE";
+        riskBadge.className = "status-badge badge-warn";
+        scoreBar.style.backgroundColor = "#d97706";
+      } else {
+        riskBadge.innerText = "HIGH RISK";
+        riskBadge.className = "status-badge badge-bad";
+        scoreBar.style.backgroundColor = "#dc2626";
+      }
+
+      // Render Dynamic Domain Signals
+      domainList.innerHTML = evaluation.domainSignals.map(s => `
+        <li class="signal-item">
+          <span class="signal-icon">${s.icon}</span>
+          <span>${s.text}</span>
+        </li>
+      `).join('');
+
+      // Render Dynamic Content Signals
+      contentList.innerHTML = evaluation.contentSignals.map(s => `
+        <li class="signal-item">
+          <span class="signal-icon">${s.icon}</span>
+          <span>${s.text}</span>
+        </li>
+      `).join('');
 
     } catch (err) {
       console.error(err);
-      if (statusEl) statusEl.innerText = "Error scanning tab. Refresh and retry.";
-    } finally {
-      resetButtons();
+      headlineEl.innerText = "Scan Failed";
     }
-  });
+  }
 
+  // Highlight Button Event
   highlightBtn.addEventListener('click', async () => {
-    if (!currentTabId || detectedKeywords.length === 0) return;
-
+    if (!activeTabId || flaggedWords.length === 0) return;
     try {
-      await chrome.tabs.sendMessage(currentTabId, {
+      await chrome.tabs.sendMessage(activeTabId, {
         action: "HIGHLIGHT_WORDS",
-        words: detectedKeywords
+        words: flaggedWords
       });
-      if (statusEl) statusEl.innerText = "Flagged words highlighted on page!";
     } catch (e) {
       await chrome.scripting.executeScript({
-        target: { tabId: currentTabId },
+        target: { tabId: activeTabId },
         files: ['content.js']
       });
-      chrome.tabs.sendMessage(currentTabId, {
+      chrome.tabs.sendMessage(activeTabId, {
         action: "HIGHLIGHT_WORDS",
-        words: detectedKeywords
+        words: flaggedWords
       });
-      if (statusEl) statusEl.innerText = "Flagged words highlighted on page!";
     }
   });
 
-  function resetButtons() {
-    analyzeBtn.disabled = false;
-    analyzeBtn.innerText = "Analyze Page";
-  }
+  reanalyzeBtn.addEventListener('click', runScan);
 
-  function renderScore(evaluation) {
-    if (scoreBox) {
-      scoreBox.innerText = `${evaluation.finalScore}/100`;
-      if (evaluation.finalScore >= 75) scoreBox.style.color = "#15803d";
-      else if (evaluation.finalScore >= 50) scoreBox.style.color = "#a16207";
-      else scoreBox.style.color = "#dc2626";
-    }
-
-    if (riskBadge) {
-      if (evaluation.finalScore >= 75) {
-        riskBadge.innerText = "Low Risk";
-        riskBadge.className = "status-pill pill-good";
-      } else if (evaluation.finalScore >= 50) {
-        riskBadge.innerText = "Moderate";
-        riskBadge.className = "status-pill pill-warn";
-      } else {
-        riskBadge.innerText = "High Risk";
-        riskBadge.className = "status-pill pill-bad";
-      }
-    }
-  }
-
-  function renderBreakdown(breakdown) {
-    if (!breakdownList) return;
-    breakdownList.innerHTML = breakdown.map(item => `
-      <li class="breakdown-item">
-        <span>${item.label}</span>
-        <span class="deduction ${item.delta > 0 ? 'pos' : (item.delta < 0 ? 'neg' : '')}">
-          ${item.delta > 0 ? '+' : ''}${item.delta !== 0 ? item.delta : '0'}
-        </span>
-      </li>
-    `).join('');
-  }
+  // Run automatically when popup opens
+  runScan();
 });
 
-// Runs in the webpage context
-function scrapePageDirectly() {
+function scrapePageData() {
   const headline = document.querySelector('h1')?.innerText?.trim() || document.title || "";
-  
   const paragraphs = Array.from(document.querySelectorAll('article p, main p, p'))
     .map(p => p.innerText.trim())
-    .filter(text => text.length > 30 && !text.includes("©") && !text.includes("cookie"));
-  
+    .filter(text => text.length > 25 && !text.includes("cookie") && !text.includes("©"));
   const bodyText = paragraphs.join(' ');
-  const quotesCount = (bodyText.match(/"([^"]{10,})"/g) || []).length;
 
-  const hasByline = !!(
-    document.querySelector('[rel="author"]') ||
-    document.querySelector('meta[name="author"]') ||
-    document.querySelector('.byline, .author, [itemprop="author"]')
-  );
-
-  const currentHost = window.location.hostname;
+  const currentHost = window.location.hostname.toLowerCase();
   const externalLinks = Array.from(document.querySelectorAll('article p a, main p a'))
     .map(a => a.href)
     .filter(href => {
@@ -164,8 +147,15 @@ function scrapePageDirectly() {
       }
     });
 
+  const quotesCount = (bodyText.match(/"([^"]{10,})"/g) || []).length;
+  const hasByline = !!(
+    document.querySelector('[rel="author"]') ||
+    document.querySelector('meta[name="author"]') ||
+    document.querySelector('.byline, .author, [itemprop="author"]')
+  );
+
   return {
-    hostname: window.location.hostname.toLowerCase(),
+    hostname: currentHost,
     headline: headline,
     bodyText: bodyText,
     isHttps: window.location.protocol === 'https:',
@@ -175,15 +165,15 @@ function scrapePageDirectly() {
   };
 }
 
-// Logic engine
-function computeEvaluation(data, sensationalWords) {
+function evaluateContent(data, sensationalWords) {
   let score = 70;
-  const breakdown = [{ label: "Baseline Score", delta: 70 }];
+  const domainSignals = [];
+  const contentSignals = [];
 
   // 1. Domain Check
   const TRUSTED_DOMAINS = [
     "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk", "npr.org", 
-    "pbs.org", "wsj.com", "nature.com", "theguardian.com", "nytimes.com", "washingtonpost.com"
+    "wsj.com", "nytimes.com", "theguardian.com", "wikipedia.org", "nature.com"
   ];
   const SUSPICIOUS_TLDS = [".xyz", ".top", ".info", ".buzz", ".click", ".news"];
 
@@ -192,17 +182,25 @@ function computeEvaluation(data, sensationalWords) {
 
   if (isTrusted) {
     score += 15;
-    breakdown.push({ label: "Recognized news organization", delta: 15 });
+    domainSignals.push({ icon: "✅", text: "Recognized legitimate news outlet" });
   } else if (hasSuspiciousTLD) {
     score -= 20;
-    breakdown.push({ label: "High-risk domain extension", delta: -20 });
+    domainSignals.push({ icon: "⚠️", text: "Domain uses high-risk suspicious TLD" });
+  } else {
+    domainSignals.push({ icon: "ℹ️", text: `Unverified domain: ${data.hostname}` });
   }
 
-  // 2. Sensational words with isolated word boundary matching
-  const fullText = data.headline + " " + data.bodyText;
+  if (data.isHttps) {
+    domainSignals.push({ icon: "🔒", text: "Secure encrypted protocol (HTTPS)" });
+  } else {
+    score -= 25;
+    domainSignals.push({ icon: "⚠️", text: "Insecure protocol connection (HTTP)" });
+  }
+
+  // 2. Sensational Words
+  const fullText = (data.headline + " " + data.bodyText);
   const matchedWords = [];
   sensationalWords.forEach(word => {
-    // Escapes special characters and requires boundaries on both ends (\b)
     const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp(`\\b${escaped}\\b`, 'i');
     if (regex.test(fullText)) {
@@ -213,56 +211,39 @@ function computeEvaluation(data, sensationalWords) {
   if (matchedWords.length > 0) {
     const penalty = Math.min(matchedWords.length * 8, 35);
     score -= penalty;
-    breakdown.push({ label: `Sensational keywords (${matchedWords.length})`, delta: -penalty });
+    contentSignals.push({ icon: "⚠️", text: `Loaded language detected (${matchedWords.length} terms, e.g. "${matchedWords[0]}")` });
   } else {
     score += 5;
-    breakdown.push({ label: "Objective tone & language", delta: 5 });
+    contentSignals.push({ icon: "✅", text: "No sensationalist buzzwords found" });
   }
 
-  // 3. Headline Caps check
+  // 3. Headline Caps
   const lettersOnly = data.headline.replace(/[^a-zA-Z]/g, '');
   if (lettersOnly.length > 0) {
-    const uppercaseLetters = data.headline.replace(/[^A-Z]/g, '').length;
-    const capsPercent = (uppercaseLetters / lettersOnly.length) * 100;
-    if (capsPercent > 35) {
+    const caps = (data.headline.replace(/[^A-Z]/g, '').length / lettersOnly.length) * 100;
+    if (caps > 35) {
       score -= 15;
-      breakdown.push({ label: "Excessive headline capitalization", delta: -15 });
+      contentSignals.push({ icon: "⚠️", text: "Excessive capitalization in headline" });
     }
   }
 
-  // 4. Byline check
+  // 4. Bylines & Quotes
   if (data.hasByline) {
     score += 10;
-    breakdown.push({ label: "Verified journalist/author byline", delta: 10 });
+    contentSignals.push({ icon: "✅", text: "Verified author/reporter byline present" });
   } else {
     score -= 10;
-    breakdown.push({ label: "Anonymous or missing author byline", delta: -10 });
+    contentSignals.push({ icon: "⚠️", text: "Anonymous or missing reporter byline" });
   }
 
-  // 5. Direct quotes check
-  if (data.quotesCount >= 3) {
+  if (data.quotesCount >= 2) {
     score += 10;
-    breakdown.push({ label: `Direct quotes found (${data.quotesCount})`, delta: 10 });
+    contentSignals.push({ icon: "✅", text: `Direct quotes and statements found (${data.quotesCount})` });
   } else if (data.quotesCount === 0) {
     score -= 10;
-    breakdown.push({ label: "No direct quotes or primary sources", delta: -10 });
-  }
-
-  // 6. External citation links
-  if (data.externalLinksCount >= 2) {
-    score += 5;
-    breakdown.push({ label: "Cites external sources/links", delta: 5 });
-  } else if (data.externalLinksCount === 0) {
-    score -= 10;
-    breakdown.push({ label: "No outbound source references", delta: -10 });
-  }
-
-  // 7. HTTPS
-  if (!data.isHttps) {
-    score -= 25;
-    breakdown.push({ label: "Insecure protocol (HTTP)", delta: -25 });
+    contentSignals.push({ icon: "⚠️", text: "No direct quotes or primary witnesses" });
   }
 
   const finalScore = Math.max(5, Math.min(99, score));
-  return { finalScore, breakdown, matchedWords };
+  return { finalScore, domainSignals, contentSignals, matchedWords };
 }
