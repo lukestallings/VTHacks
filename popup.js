@@ -1,125 +1,168 @@
 document.addEventListener('DOMContentLoaded', () => {
   const analyzeBtn = document.getElementById('analyzeBtn');
+  const statusEl = document.getElementById('status');
+  const scoreBox = document.getElementById('scoreBox');
+  const riskBadge = document.getElementById('riskBadge');
+
   if (!analyzeBtn) return;
 
   analyzeBtn.addEventListener('click', async () => {
-    const statusEl = document.getElementById('status');
-    statusEl.innerText = "Analyzing article content...";
+    // 1. Enter loading state
+    analyzeBtn.disabled = true;
+    analyzeBtn.innerText = "Analyzing page...";
+    if (statusEl) statusEl.innerText = "Scanning headline, language, and citations...";
+    if (scoreBox) {
+      scoreBox.innerText = "--";
+      scoreBox.style.color = "#64748b";
+    }
+    if (riskBadge) {
+      riskBadge.innerText = "Scanning...";
+      riskBadge.className = "status-pill pill-warn";
+    }
 
-    // 1. Get current active tab
+    // 2. Query active tab
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (!tab || !tab.id) {
-      statusEl.innerText = "Error: Cannot access tab.";
+      if (statusEl) statusEl.innerText = "Error: Cannot access tab.";
+      resetButton();
       return;
     }
 
-    // Prevent running on internal browser pages
-    if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('chrome-extension://')) {
-      statusEl.innerText = "Navigate to an actual article website first!";
+    if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('chrome-extension://'))) {
+      if (statusEl) statusEl.innerText = "Navigate to an actual article website first!";
+      resetButton();
       return;
     }
 
     try {
-      // 2. Inject and execute the scraper function directly
+      // 3. Short artificial delay (1.2 seconds) to display analysis in progress
+      await new Promise(resolve => setTimeout(resolve, 1200));
+
+      // 4. Inject DOM scraper
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: scrapePageDirectly
       });
 
       if (!results || !results[0] || !results[0].result || !results[0].result.bodyText) {
-        statusEl.innerText = "No article text detected on this page.";
+        if (statusEl) statusEl.innerText = "No readable article text detected.";
+        resetButton();
         return;
       }
 
+      // 5. Score and render results
       evaluateSignals(results[0].result);
-      statusEl.innerText = "Analysis complete.";
+      if (statusEl) statusEl.innerText = "Analysis complete.";
     } catch (err) {
       console.error(err);
-      statusEl.innerText = "Error scanning page. Reload tab and retry.";
+      if (statusEl) statusEl.innerText = "Error scanning page. Reload tab and retry.";
+    } finally {
+      resetButton();
+    }
+
+    function resetButton() {
+      analyzeBtn.disabled = false;
+      analyzeBtn.innerText = "Analyze Current Page";
     }
   });
 });
 
-// Runs inside the webpage context
+// Runs directly inside the target web page context
 function scrapePageDirectly() {
-  const headline = document.querySelector('h1')?.innerText || document.title || "";
-  
+  const headline = document.querySelector('h1')?.innerText?.trim() || document.title || "";
   const paragraphs = Array.from(document.querySelectorAll('article p, main p, p'))
     .map(p => p.innerText.trim())
-    .filter(text => text.length > 20);
-
-  const fullText = paragraphs.join(" ");
+    .filter(text => text.length > 25);
+  const bodyText = paragraphs.join(' ');
 
   const links = Array.from(document.querySelectorAll('article a, main a, p a'))
     .map(a => a.href)
-    .filter(href => href && href.startsWith('http'));
+    .filter(href => href.startsWith('http'));
 
   return {
+    headline: headline,
+    bodyText: bodyText,
     url: window.location.href,
     isHttps: window.location.protocol === 'https:',
-    headline: headline,
-    bodyText: fullText,
-    linkCount: links.length
+    outboundLinks: links
   };
 }
 
+// Computes heuristic scores based on content signals
 function evaluateSignals(data) {
-  const text = data.bodyText;
-  const headline = data.headline;
+  let score = 100;
 
   // 1. Sensational buzzwords check
-  const sensationalWordList = [
-    'shocking', 'unbelievable', 'you won\'t believe', 'secret they don\'t want',
-    'mind-blowing', 'exposed', 'conspiracy', 'miracle cure', 'urgent alert',
-    'banned', 'they don\'t want you to know'
+  const sensationalWords = [
+    "shocking", "unbelievable", "mind-blowing", "miracle", "secret",
+    "they don't want you to know", "exposed", "horrifying", "you won't believe",
+    "bombshell", "conspiracy", "mainstream media won't tell you"
   ];
+  const lowerText = (data.headline + " " + data.bodyText).toLowerCase();
   let sensationalHits = 0;
-  sensationalWordList.forEach(word => {
-    const regex = new RegExp(`\\b${word}\\b`, 'gi');
-    const matches = (headline + " " + text).match(regex);
-    if (matches) sensationalHits += matches.length;
+  sensationalWords.forEach(word => {
+    if (lowerText.includes(word)) sensationalHits++;
   });
+  score -= Math.min(sensationalHits * 12, 36);
 
-  // 2. ALL CAPS ratio
-  const lettersOnly = text.replace(/[^a-zA-Z]/g, '');
-  const upperCaseOnly = lettersOnly.replace(/[^A-Z]/g, '');
-  const capsPercent = lettersOnly.length > 0 ? (upperCaseOnly.length / lettersOnly.length) * 100 : 0;
+  // 2. ALL CAPS ratio check
+  const lettersOnly = data.headline.replace(/[^a-zA-Z]/g, '');
+  let capsPercent = 0;
+  if (lettersOnly.length > 0) {
+    const uppercaseLetters = data.headline.replace(/[^A-Z]/g, '').length;
+    capsPercent = (uppercaseLetters / lettersOnly.length) * 100;
+    if (capsPercent > 35) {
+      score -= 20;
+    }
+  }
 
-  // 3. Link/Citation count
-  const citations = data.linkCount;
+  // 3. Outbound citation link check
+  const citations = data.outboundLinks.length;
+  if (citations === 0) {
+    score -= 15;
+  } else if (citations >= 3) {
+    score += 5;
+  }
 
-  // 4. Calculate starter score (0-100)
-  let score = 85;
-  score -= Math.min(sensationalHits * 8, 30);
-  if (capsPercent > 12) score -= 15;
-  if (!data.isHttps) score -= 20;
-  if (citations >= 3) score += 10;
-  if (citations === 0) score -= 15;
+  // 4. Secure protocol check
+  if (!data.isHttps) {
+    score -= 25;
+  }
 
-  score = Math.max(5, Math.min(100, Math.round(score)));
+  // Clamp score between 10 and 99
+  score = Math.max(10, Math.min(99, score));
 
-  // Update UI elements
+  // Render to popup UI elements
   const scoreBox = document.getElementById('scoreBox');
   const riskBadge = document.getElementById('riskBadge');
 
-  scoreBox.innerText = `${score}/100`;
+  if (scoreBox) scoreBox.innerText = `${score}/100`;
 
-  if (score >= 70) {
-    scoreBox.style.color = "#15803d";
-    riskBadge.innerText = "Low Risk";
-    riskBadge.className = "status-pill pill-good";
-  } else if (score >= 45) {
-    scoreBox.style.color = "#a16207";
-    riskBadge.innerText = "Moderate";
-    riskBadge.className = "status-pill pill-warn";
-  } else {
-    scoreBox.style.color = "#dc2626";
-    riskBadge.innerText = "High Risk";
-    riskBadge.className = "status-pill pill-bad";
+  if (riskBadge) {
+    if (score >= 75) {
+      if (scoreBox) scoreBox.style.color = "#15803d";
+      riskBadge.innerText = "Low Risk";
+      riskBadge.className = "status-pill pill-good";
+    } else if (score >= 50) {
+      if (scoreBox) scoreBox.style.color = "#a16207";
+      riskBadge.innerText = "Moderate";
+      riskBadge.className = "status-pill pill-warn";
+    } else {
+      if (scoreBox) scoreBox.style.color = "#dc2626";
+      riskBadge.innerText = "High Risk";
+      riskBadge.className = "status-pill pill-bad";
+    }
   }
 
-  document.getElementById('sensationalCount').innerText = `${sensationalHits} flagged`;
-  document.getElementById('capsRatio').innerText = `${capsPercent.toFixed(1)}%`;
-  document.getElementById('citationCount').innerText = `${citations} links`;
-  document.getElementById('securityStatus').innerText = data.isHttps ? "HTTPS" : "Insecure (HTTP)";
+  const sensationalEl = document.getElementById('sensationalCount');
+  if (sensationalEl) sensationalEl.innerText = `${sensationalHits} flagged`;
+
+  const capsEl = document.getElementById('capsRatio');
+  if (capsEl) capsEl.innerText = `${capsPercent.toFixed(1)}%`;
+
+  const citationEl = document.getElementById('citationCount');
+  if (citationEl) citationEl.innerText = `${citations} links`;
+
+  const securityEl = document.getElementById('securityStatus');
+  if (securityEl) securityEl.innerText = data.isHttps ? "HTTPS" : "Insecure (HTTP)";
 }
