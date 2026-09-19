@@ -7,13 +7,11 @@
 </head>
 <body>
   <div class="card">
-    
-    <!-- REDESIGNED HEADER -->
     <header class="header">
-      <div class="analysis-brand-bar">
-        <div class="logo-and-site">
-          <!-- Klarity Shield Logo -->
-          <svg class="klarity-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="36" height="36">
+      <div class="brand">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <!-- Klarity Shield Logo (Canva Blue Gradient) -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="28" height="28">
             <defs>
               <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" style="stop-color:#00C4CC;stop-opacity:1" />
@@ -23,15 +21,11 @@
             <path d="M250 60 L100 120 V250 C100 360 160 430 250 470 C340 430 400 360 400 250 V120 Z" fill="url(#shieldGrad)" />
             <path d="M200 180 V350 M200 265 L290 180 M240 225 L300 350" stroke="#ffffff" stroke-width="40" stroke-linecap="round" stroke-linejoin="round" fill="none" />
           </svg>
-          
-          <div class="site-title-group">
-            <span class="klarity-brand-text">Klarity Analysis</span>
-            <!-- This will be dynamically updated by JavaScript -->
-            <h1 id="current-website">Loading...</h1>
-          </div>
+          <h1>Klarity</h1>
         </div>
         <span class="badge danger">High Risk</span>
       </div>
+      <p class="subtitle">Content Analysis Nutrition Label</p>
     </header>
 
     <div class="meter-section">
@@ -50,6 +44,15 @@
         <ul class="signal-list">
           <li class="flag-item">Domain age &lt; 1 year (WHOIS check failed)</li>
           <li class="flag-item">Domain name mimics a legitimate outlet (typosquatting)</li>
+          <li class="flag-item">Excessive pop-ups and aggressive ad density</li>
+        </ul>
+      </section>
+
+      <section class="signal-group">
+        <h2>Authorship</h2>
+        <ul class="signal-list">
+          <li class="flag-item">No byline or traceable published work</li>
+          <li class="flag-item">Single author publishing implausibly high volume</li>
         </ul>
       </section>
 
@@ -58,6 +61,15 @@
         <ul class="signal-list">
           <li class="flag-item">Excessive/emotionally loaded language (e.g., "SHOCKING")</li>
           <li class="flag-item">No cited sources (citation laundering loop detected)</li>
+          <li class="flag-item">Statistical claims with no linked data/study</li>
+        </ul>
+      </section>
+
+      <section class="signal-group">
+        <h2>Distribution & Virality</h2>
+        <ul class="signal-list">
+          <li class="flag-item">Disproportionate social shares (bot amplification pattern)</li>
+          <li class="flag-item">Comment section dominated by newly created profiles</li>
         </ul>
       </section>
     </div>
