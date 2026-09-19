@@ -69,6 +69,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const data = results[0].result;
+      const domainAgeDays = await getDomainAgeInDays(data.hostname);
+      data.domainAgeDays = domainAgeDays;
+      const evaluation = evaluateContent(data, SENSATIONAL_WORDS);
       const evaluation = evaluateContent(data, SENSATIONAL_WORDS);
       flaggedWords = evaluation.matchedWords;
 
