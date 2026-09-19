@@ -2,91 +2,70 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>NewsShield</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      width: 320px;
-      margin: 0;
-      padding: 16px;
-      background-color: #f8fafc;
-      color: #1e293b;
-    }
-    h2 {
-      margin: 0 0 12px 0;
-      font-size: 1.1rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .score-badge {
-      font-size: 1.3rem;
-      font-weight: 700;
-      padding: 6px 12px;
-      border-radius: 8px;
-      text-align: center;
-      margin-bottom: 12px;
-      background: #e2e8f0;
-    }
-    .score-good { background: #dcfce7; color: #15803d; }
-    .score-warn { background: #fef9c3; color: #a16207; }
-    .score-bad  { background: #fee2e2; color: #b91c1c; }
-
-    .stat-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 0;
-      border-bottom: 1px solid #e2e8f0;
-      font-size: 0.85rem;
-    }
-    .stat-label { color: #64748b; }
-    .stat-val { font-weight: 600; }
-
-    button {
-      width: 100%;
-      margin-top: 14px;
-      padding: 10px;
-      border: none;
-      background: #2563eb;
-      color: white;
-      font-weight: 600;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    button:hover { background: #1d4ed8; }
-    #status {
-      font-size: 0.8rem;
-      color: #64748b;
-      margin-top: 8px;
-      text-align: center;
-    }
-  </style>
+  <title>News Shield Nutrition Label</title>
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <h2>NewsShield <span style="font-size: 0.8rem; font-weight: normal;">v1.0</span></h2>
+  <div class="card">
+    <header class="header">
+      <div class="brand">
+        <h1>News Shield</h1>
+        <span class="badge danger">High Risk</span>
+      </div>
+      <p class="subtitle">Content Analysis Nutrition Label</p>
+    </header>
 
-  <div id="scoreBox" class="score-badge">Click Analyze</div>
+    <div class="meter-section">
+      <div class="meter-label">
+        <span>Credibility Score</span>
+        <span>24/100</span>
+      </div>
+      <div class="meter-bar">
+        <div class="meter-fill danger-fill" style="width: 24%;"></div>
+      </div>
+    </div>
 
-  <div class="stat-row">
-    <span class="stat-label">Sensational Words:</span>
-    <span class="stat-val" id="sensationalCount">-</span>
-  </div>
-  <div class="stat-row">
-    <span class="stat-label">ALL CAPS Ratio:</span>
-    <span class="stat-val" id="capsRatio">-</span>
-  </div>
-  <div class="stat-row">
-    <span class="stat-label">Outbound Citations:</span>
-    <span class="stat-val" id="citationCount">-</span>
-  </div>
-  <div class="stat-row">
-    <span class="stat-label">Protocol:</span>
-    <span class="stat-val" id="securityStatus">-</span>
-  </div>
+    <div class="signals-container">
+      <section class="signal-group">
+        <h2>Domain & Site Signals</h2>
+        <ul class="signal-list">
+          <li class="flag-item">Domain age &lt; 1 year (WHOIS check failed)</li>
+          <li class="flag-item">Domain name mimics a legitimate outlet (typosquatting)</li>
+          <li class="flag-item">Excessive pop-ups and aggressive ad density</li>
+        </ul>
+      </section>
 
-  <button id="analyzeBtn">Analyze Current Page</button>
-  <div id="status">Ready to scan article</div>
+      <section class="signal-group">
+        <h2>Authorship</h2>
+        <ul class="signal-list">
+          <li class="flag-item">No byline or traceable published work</li>
+          <li class="flag-item">Single author publishing implausibly high volume</li>
+        </ul>
+      </section>
 
+      <section class="signal-group">
+        <h2>Content Analysis</h2>
+        <ul class="signal-list">
+          <li class="flag-item">Excessive/emotionally loaded language (e.g., "SHOCKING")</li>
+          <li class="flag-item">No cited sources (citation laundering loop detected)</li>
+          <li class="flag-item">Statistical claims with no linked data/study</li>
+        </ul>
+      </section>
+
+      <section class="signal-group">
+        <h2>Distribution & Virality</h2>
+        <ul class="signal-list">
+          <li class="flag-item">Disproportionate social shares (bot amplification pattern)</li>
+          <li class="flag-item">Comment section dominated by newly created profiles</li>
+        </ul>
+      </section>
+    </div>
+
+    <footer class="footer">
+      <button class="action-btn" id="inspect-btn">Inspect Highlights</button>
+      <button class="action-btn secondary" id="details-btn">View Full Report</button>
+    </footer>
+  </div>
   <script src="popup.js"></script>
 </body>
 </html>
