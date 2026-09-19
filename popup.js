@@ -7,8 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     statusEl.innerText = "Analyzing article content...";
 
     // 1. Get current active tab
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (!tab || !tab.id) {
       statusEl.innerText = "Error: Cannot access tab.";
       return;
