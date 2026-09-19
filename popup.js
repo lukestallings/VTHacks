@@ -20,7 +20,6 @@ document.addEventListener('DOMContentLoaded', () => {
   ];
 
   async function runScan() {
-    // 1. Activate loading state & visual bar animation
     if (scoreBar) {
       scoreBar.classList.add('is-loading');
     }
@@ -54,7 +53,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      // Small artificial delay (250ms) so judges visibly see the sleek loading pulse
       await new Promise(res => setTimeout(res, 250));
 
       const results = await chrome.scripting.executeScript({
@@ -75,7 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const evaluation = evaluateContent(data, SENSATIONAL_WORDS);
       flaggedWords = evaluation.matchedWords;
 
-      // Update Headline
       if (headlineEl) {
         if (data.headline && data.headline.length > 0) {
           headlineEl.innerText = data.headline.length > 32 
@@ -86,7 +83,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // Stop loading animation and fill the calculated score bar
       if (scoreBar) {
         scoreBar.classList.remove('is-loading');
         scoreBar.style.width = `${evaluation.finalScore}%`;
@@ -101,7 +97,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (scoreVal) scoreVal.innerText = `${evaluation.finalScore}/100`;
 
-      // Update Badge
       if (riskBadge) {
         if (evaluation.finalScore >= 75) {
           riskBadge.innerText = "LOW RISK";
@@ -115,7 +110,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // Render Dynamic Domain Signals
       if (domainList) {
         domainList.innerHTML = evaluation.domainSignals.map(s => `
           <li class="signal-item">
@@ -125,7 +119,6 @@ document.addEventListener('DOMContentLoaded', () => {
         `).join('');
       }
 
-      // Render Dynamic Content Signals
       if (contentList) {
         contentList.innerHTML = evaluation.contentSignals.map(s => `
           <li class="signal-item">
@@ -144,17 +137,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function getDomainAgeInDays(hostname) {
     try {
-      // Strip subdomains to find root domain (e.g., "news.example.com" -> "example.com")
       const parts = hostname.split('.');
       const rootDomain = parts.length > 2 ? parts.slice(-2).join('.') : hostname;
 
-      // RDAP public gateway (free, no API key required)
       const response = await fetch(`https://rdap.org/domain/${rootDomain}`, { cache: "force-cache" });
       if (!response.ok) return null;
 
       const data = await response.json();
       
-      // RDAP stores event dates in an events array
       const registrationEvent = data.events?.find(e => 
         e.eventAction === "registration" || e.eventAction === "last changed"
       );
@@ -173,7 +163,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Highlight Button Event
   if (highlightBtn) {
     highlightBtn.addEventListener('click', async () => {
       const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
@@ -208,7 +197,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Re-Analyze Button with Visual Feedback
   if (reanalyzeBtn) {
     reanalyzeBtn.addEventListener('click', async () => {
       reanalyzeBtn.innerText = "Scanning...";
@@ -221,7 +209,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Run automatically when popup opens
   runScan();
 });
 
@@ -233,6 +220,8 @@ function scrapePageData() {
   const bodyText = paragraphs.join(' ');
 
   const currentHost = window.location.hostname.toLowerCase();
+  const allLinks = Array.from(document.querySelectorAll('a'));
+
   const externalLinks = Array.from(document.querySelectorAll('article p a, main p a'))
     .map(a => a.href)
     .filter(href => {
@@ -243,6 +232,13 @@ function scrapePageData() {
         return false;
       }
     });
+
+  const aboutKeywords = ["about us", "about", "our team", "editorial team", "staff", "masthead", "leadership", "who we are"];
+  const hasAboutOrTeamLink = allLinks.some(link => {
+    const text = (link.innerText || "").toLowerCase().trim();
+    const href = (link.getAttribute("href") || "").toLowerCase().trim();
+    return aboutKeywords.some(kw => text === kw || href.includes(kw.replace(/\s+/g, '-')) || href.includes(kw.replace(/\s+/g, '')));
+  });
 
   const quotesCount = (bodyText.match(/"([^"]{10,})"/g) || []).length;
   const hasByline = !!(
@@ -258,7 +254,8 @@ function scrapePageData() {
     isHttps: window.location.protocol === 'https:',
     externalLinksCount: externalLinks.length,
     quotesCount: quotesCount,
-    hasByline: hasByline
+    hasByline: hasByline,
+    hasAboutOrTeamLink: hasAboutOrTeamLink
   };
 }
 
@@ -274,10 +271,15 @@ function evaluateContent(data, sensationalWords) {
   ];
   const SUSPICIOUS_TLDS = [".xyz", ".top", ".info", ".buzz", ".click", ".news"];
 
+  // Check for official government domains (.gov or international .gov.* e.g. .gov.uk)
+  const isGov = data.hostname.endsWith('.gov') || data.hostname.includes('.gov.');
   const isTrusted = TRUSTED_DOMAINS.some(domain => data.hostname.includes(domain));
   const hasSuspiciousTLD = SUSPICIOUS_TLDS.some(tld => data.hostname.endsWith(tld));
 
-  if (isTrusted) {
+  if (isGov) {
+    score += 25;
+    domainSignals.push({ icon: "🏛️", text: "Verified official government domain (.gov)" });
+  } else if (isTrusted) {
     score += 15;
     domainSignals.push({ icon: "✅", text: "Recognized legitimate news outlet" });
   } else if (hasSuspiciousTLD) {
@@ -287,7 +289,7 @@ function evaluateContent(data, sensationalWords) {
     domainSignals.push({ icon: "ℹ️", text: `Unverified domain: ${data.hostname}` });
   }
 
-  // --- Domain Age (RDAP/WHOIS) Check ---
+  // Domain Age Check
   if (data.domainAgeDays !== null && data.domainAgeDays !== undefined) {
     const ageInYears = (data.domainAgeDays / 365).toFixed(1);
 
@@ -310,11 +312,20 @@ function evaluateContent(data, sensationalWords) {
         text: `Established domain (${ageInYears} years active)`
       });
     }
-  } else {
+  } else if (!isGov) {
     domainSignals.push({
       icon: "ℹ️",
       text: "Domain age private or unavailable via RDAP"
     });
+  }
+
+  // About Us / Editorial Team Link Verification
+  if (data.hasAboutOrTeamLink) {
+    score += 5;
+    domainSignals.push({ icon: "✅", text: "Public About Us / Editorial Team page present" });
+  } else if (!isGov) {
+    score -= 10;
+    domainSignals.push({ icon: "⚠️", text: "No transparent About Us or Masthead link found" });
   }
 
   if (data.isHttps) {
@@ -358,6 +369,9 @@ function evaluateContent(data, sensationalWords) {
   if (data.hasByline) {
     score += 10;
     contentSignals.push({ icon: "✅", text: "Verified author/reporter byline present" });
+  } else if (isGov) {
+    score += 5;
+    contentSignals.push({ icon: "🏛️", text: "Official public sector agency report (no individual byline needed)" });
   } else {
     score -= 10;
     contentSignals.push({ icon: "⚠️", text: "Anonymous or missing reporter byline" });
@@ -366,7 +380,7 @@ function evaluateContent(data, sensationalWords) {
   if (data.quotesCount >= 2) {
     score += 10;
     contentSignals.push({ icon: "✅", text: `Direct quotes and statements found (${data.quotesCount})` });
-  } else if (data.quotesCount === 0) {
+  } else if (data.quotesCount === 0 && !isGov) {
     score -= 10;
     contentSignals.push({ icon: "⚠️", text: "No direct quotes or primary witnesses" });
   }
