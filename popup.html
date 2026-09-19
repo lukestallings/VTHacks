@@ -2,145 +2,157 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Klarity</title>
+  <title>NewsShield Analysis</title>
   <style>
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     body {
-      width: 340px;
+      width: 320px;
       padding: 16px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background-color: #f8fafc;
+      background: #f8fafc;
       color: #0f172a;
     }
-    .header {
+    header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
-    .header h1 {
-      font-size: 1.15rem;
+    h1 {
+      font-size: 16px;
       font-weight: 700;
-      letter-spacing: -0.02em;
+      color: #1e293b;
     }
     .status-pill {
-      font-size: 0.72rem;
-      font-weight: 700;
-      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
       border-radius: 9999px;
-      text-transform: uppercase;
-      background-color: #e2e8f0;
+      background: #e2e8f0;
       color: #475569;
     }
-    .pill-good { background-color: #dcfce7; color: #15803d; }
-    .pill-warn { background-color: #fef9c3; color: #a16207; }
-    .pill-bad  { background-color: #fee2e2; color: #b91c1c; }
+    .pill-good { background: #dcfce7; color: #15803d; }
+    .pill-warn { background: #fef9c3; color: #a16207; }
+    .pill-bad  { background: #fee2e2; color: #b91c1c; }
 
-    .nutrition-card {
-      background: #ffffff;
+    .score-card {
+      background: white;
       border: 1px solid #e2e8f0;
-      border-radius: 10px;
+      border-radius: 8px;
       padding: 14px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-      margin-bottom: 14px;
+      text-align: center;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-    .score-banner {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      border-bottom: 2px solid #0f172a;
-      padding-bottom: 8px;
-      margin-bottom: 10px;
-    }
-    .score-title {
-      font-size: 0.75rem;
+    .score-number {
+      font-size: 32px;
       font-weight: 800;
+      color: #334155;
+    }
+    .score-label {
+      font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-    }
-    .score-val {
-      font-size: 1.35rem;
-      font-weight: 900;
       color: #64748b;
-    }
-    .stat-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 6px 0;
-      border-bottom: 1px solid #f1f5f9;
-      font-size: 0.82rem;
-    }
-    .stat-label {
-      color: #64748b;
-      font-weight: 500;
-    }
-    .stat-val {
-      font-weight: 600;
-      color: #0f172a;
+      margin-top: 2px;
     }
 
-    #analyzeBtn {
-      display: block;
+    button {
       width: 100%;
-      padding: 11px;
-      background-color: #2563eb;
-      color: #ffffff;
+      padding: 10px;
+      font-size: 13px;
+      font-weight: 600;
       border: none;
-      border-radius: 8px;
-      font-size: 0.9rem;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 8px;
+      transition: background 0.15s;
+    }
+    #analyzeBtn {
+      background: #2563eb;
+      color: white;
+    }
+    #analyzeBtn:hover { background: #1d4ed8; }
+    #analyzeBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    #highlightBtn {
+      background: #f1f5f9;
+      color: #334155;
+      border: 1px solid #cbd5e1;
+    }
+    #highlightBtn:hover { background: #e2e8f0; }
+    #highlightBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .status-text {
+      font-size: 11px;
+      color: #64748b;
+      text-align: center;
+      margin-bottom: 12px;
+      min-height: 16px;
+    }
+
+    /* Score Breakdown Dropdown */
+    details {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 12px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    summary {
+      padding: 8px 12px;
       font-weight: 600;
       cursor: pointer;
-      text-align: center;
+      background: #f8fafc;
+      color: #334155;
+      user-select: none;
     }
-    #analyzeBtn:hover {
-      background-color: #1d4ed8;
+    summary:hover { background: #f1f5f9; }
+    .breakdown-list {
+      padding: 8px 12px;
+      list-style: none;
     }
-    #status {
-      font-size: 0.75rem;
-      color: #64748b;
-      margin-top: 8px;
-      text-align: center;
+    .breakdown-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px solid #f1f5f9;
+      color: #475569;
     }
+    .breakdown-item:last-child { border-bottom: none; }
+    .deduction { font-weight: 600; }
+    .deduction.neg { color: #dc2626; }
+    .deduction.pos { color: #16a34a; }
   </style>
 </head>
 <body>
+  <header>
+    <h1>NewsShield</h1>
+    <span id="riskBadge" class="status-pill">Ready</span>
+  </header>
 
-  <div class="header">
-    <h1>Klarity</h1>
-    <span class="status-pill" id="riskBadge">Ready</span>
+  <div class="score-card">
+    <div id="scoreBox" class="score-number">--</div>
+    <div class="score-label">Credibility Score</div>
   </div>
 
-  <div class="nutrition-card">
-    <div class="score-banner">
-      <span class="score-title">Credibility Index</span>
-      <span class="score-val" id="scoreBox">--/100</span>
-    </div>
+  <button id="analyzeBtn">Analyze Page</button>
+  <button id="highlightBtn" disabled>Highlight Flags on Page</button>
+  <div id="status" class="status-text">Click analyze to evaluate article.</div>
 
-    <div class="stat-row">
-      <span class="stat-label">Sensational Hits:</span>
-      <span class="stat-val" id="sensationalCount">-</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-label">ALL CAPS Ratio:</span>
-      <span class="stat-val" id="capsRatio">-</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-label">Citations / Links:</span>
-      <span class="stat-val" id="citationCount">-</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-label">Protocol:</span>
-      <span class="stat-val" id="securityStatus">-</span>
-    </div>
-  </div>
+  <details id="breakdownSection">
+    <summary>Score Breakdown</summary>
+    <ul class="breakdown-list" id="breakdownList">
+      <li class="breakdown-item"><span>Base Score</span><span class="deduction">100</span></li>
+      <li class="breakdown-item"><span>Run analysis to see breakdown</span><span class="deduction">--</span></li>
+    </ul>
+  </details>
 
-  <button type="button" id="analyzeBtn">Analyze Current Page</button>
-  <div id="status">Navigate to an article tab and click Analyze</div>
-
-  <script src="popup.js" defer></script>
+  <script src="popup.js"></script>
 </body>
 </html>
