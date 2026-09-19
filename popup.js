@@ -139,24 +139,19 @@ document.addEventListener('DOMContentLoaded', () => {
 function scrapePageDirectly() {
   const headline = document.querySelector('h1')?.innerText?.trim() || document.title || "";
   
-  // Isolate body paragraphs while ignoring menus and footers
   const paragraphs = Array.from(document.querySelectorAll('article p, main p, p'))
     .map(p => p.innerText.trim())
     .filter(text => text.length > 30 && !text.includes("©") && !text.includes("cookie"));
   
   const bodyText = paragraphs.join(' ');
-
-  // Count direct quotes in the article text (key marker of reporting)
   const quotesCount = (bodyText.match(/"([^"]{10,})"/g) || []).length;
 
-  // Check for author byline metadata
   const hasByline = !!(
     document.querySelector('[rel="author"]') ||
     document.querySelector('meta[name="author"]') ||
     document.querySelector('.byline, .author, [itemprop="author"]')
   );
 
-  // Filter links specifically to external citations
   const currentHost = window.location.hostname;
   const externalLinks = Array.from(document.querySelectorAll('article p a, main p a'))
     .map(a => a.href)
@@ -182,10 +177,10 @@ function scrapePageDirectly() {
 
 // Logic engine
 function computeEvaluation(data, sensationalWords) {
-  let score = 70; // Balanced starting baseline
+  let score = 70;
   const breakdown = [{ label: "Baseline Score", delta: 70 }];
 
-  // 1. Domain Reputation Check
+  // 1. Domain Check
   const TRUSTED_DOMAINS = [
     "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk", "npr.org", 
     "pbs.org", "wsj.com", "nature.com", "theguardian.com", "nytimes.com", "washingtonpost.com"
@@ -203,11 +198,14 @@ function computeEvaluation(data, sensationalWords) {
     breakdown.push({ label: "High-risk domain extension", delta: -20 });
   }
 
-  // 2. Sensational buzzwords
-  const fullText = (data.headline + " " + data.bodyText).toLowerCase();
+  // 2. Sensational words with isolated word boundary matching
+  const fullText = data.headline + " " + data.bodyText;
   const matchedWords = [];
   sensationalWords.forEach(word => {
-    if (fullText.includes(word)) {
+    // Escapes special characters and requires boundaries on both ends (\b)
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\b${escaped}\\b`, 'i');
+    if (regex.test(fullText)) {
       matchedWords.push(word);
     }
   });
@@ -232,7 +230,7 @@ function computeEvaluation(data, sensationalWords) {
     }
   }
 
-  // 4. Source byline verification
+  // 4. Byline check
   if (data.hasByline) {
     score += 10;
     breakdown.push({ label: "Verified journalist/author byline", delta: 10 });
@@ -241,7 +239,7 @@ function computeEvaluation(data, sensationalWords) {
     breakdown.push({ label: "Anonymous or missing author byline", delta: -10 });
   }
 
-  // 5. Direct quotations count
+  // 5. Direct quotes check
   if (data.quotesCount >= 3) {
     score += 10;
     breakdown.push({ label: `Direct quotes found (${data.quotesCount})`, delta: 10 });
@@ -259,7 +257,7 @@ function computeEvaluation(data, sensationalWords) {
     breakdown.push({ label: "No outbound source references", delta: -10 });
   }
 
-  // 7. HTTPS Security
+  // 7. HTTPS
   if (!data.isHttps) {
     score -= 25;
     breakdown.push({ label: "Insecure protocol (HTTP)", delta: -25 });
