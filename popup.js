@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = results[0].result;
       const domainAgeDays = await getDomainAgeInDays(data.hostname);
       data.domainAgeDays = domainAgeDays;
-      const evaluation = evaluateContent(data, SENSATIONAL_WORDS);
+
       const evaluation = evaluateContent(data, SENSATIONAL_WORDS);
       flaggedWords = evaluation.matchedWords;
 
@@ -141,36 +141,37 @@ document.addEventListener('DOMContentLoaded', () => {
       if (headlineEl) headlineEl.innerText = "Scan Failed";
     }
   }
+
   async function getDomainAgeInDays(hostname) {
-  try {
-    // Strip subdomains to find root domain (e.g., "news.example.com" -> "example.com")
-    const parts = hostname.split('.');
-    const rootDomain = parts.length > 2 ? parts.slice(-2).join('.') : hostname;
+    try {
+      // Strip subdomains to find root domain (e.g., "news.example.com" -> "example.com")
+      const parts = hostname.split('.');
+      const rootDomain = parts.length > 2 ? parts.slice(-2).join('.') : hostname;
 
-    // RDAP public gateway (free, no API key required)
-    const response = await fetch(`https://rdap.org/domain/${rootDomain}`, { cache: "force-cache" });
-    if (!response.ok) return null;
+      // RDAP public gateway (free, no API key required)
+      const response = await fetch(`https://rdap.org/domain/${rootDomain}`, { cache: "force-cache" });
+      if (!response.ok) return null;
 
-    const data = await response.json();
-    
-    // RDAP stores event dates in an events array
-    const registrationEvent = data.events?.find(e => 
-      e.eventAction === "registration" || e.eventAction === "last changed"
-    );
+      const data = await response.json();
+      
+      // RDAP stores event dates in an events array
+      const registrationEvent = data.events?.find(e => 
+        e.eventAction === "registration" || e.eventAction === "last changed"
+      );
 
-    if (!registrationEvent || !registrationEvent.eventDate) return null;
+      if (!registrationEvent || !registrationEvent.eventDate) return null;
 
-    const regDate = new Date(registrationEvent.eventDate);
-    const now = new Date();
-    const diffTime = Math.abs(now - regDate);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    return diffDays;
-  } catch (err) {
-    console.warn("RDAP lookup failed:", err);
-    return null;
+      const regDate = new Date(registrationEvent.eventDate);
+      const now = new Date();
+      const diffTime = Math.abs(now - regDate);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      return diffDays;
+    } catch (err) {
+      console.warn("RDAP lookup failed:", err);
+      return null;
+    }
   }
-}
 
   // Highlight Button Event
   if (highlightBtn) {
@@ -266,6 +267,7 @@ function evaluateContent(data, sensationalWords) {
   const domainSignals = [];
   const contentSignals = [];
 
+  // 1. Domain Check
   const TRUSTED_DOMAINS = [
     "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk", "npr.org", 
     "wsj.com", "nytimes.com", "theguardian.com", "wikipedia.org", "nature.com"
@@ -285,6 +287,36 @@ function evaluateContent(data, sensationalWords) {
     domainSignals.push({ icon: "ℹ️", text: `Unverified domain: ${data.hostname}` });
   }
 
+  // --- Domain Age (RDAP/WHOIS) Check ---
+  if (data.domainAgeDays !== null && data.domainAgeDays !== undefined) {
+    const ageInYears = (data.domainAgeDays / 365).toFixed(1);
+
+    if (data.domainAgeDays < 180) {
+      score -= 25;
+      domainSignals.push({
+        icon: "⚠️",
+        text: `Extremely new domain (${data.domainAgeDays} days old — high risk)`
+      });
+    } else if (data.domainAgeDays < 365) {
+      score -= 10;
+      domainSignals.push({
+        icon: "⚠️",
+        text: `Domain is under 1 year old (${data.domainAgeDays} days)`
+      });
+    } else {
+      score += 5;
+      domainSignals.push({
+        icon: "✅",
+        text: `Established domain (${ageInYears} years active)`
+      });
+    }
+  } else {
+    domainSignals.push({
+      icon: "ℹ️",
+      text: "Domain age private or unavailable via RDAP"
+    });
+  }
+
   if (data.isHttps) {
     domainSignals.push({ icon: "🔒", text: "Secure encrypted protocol (HTTPS)" });
   } else {
@@ -292,6 +324,7 @@ function evaluateContent(data, sensationalWords) {
     domainSignals.push({ icon: "⚠️", text: "Insecure protocol connection (HTTP)" });
   }
 
+  // 2. Sensational Words
   const fullText = (data.headline + " " + data.bodyText);
   const matchedWords = [];
   sensationalWords.forEach(word => {
@@ -311,6 +344,7 @@ function evaluateContent(data, sensationalWords) {
     contentSignals.push({ icon: "✅", text: "No sensationalist buzzwords found" });
   }
 
+  // 3. Headline Caps
   const lettersOnly = data.headline.replace(/[^a-zA-Z]/g, '');
   if (lettersOnly.length > 0) {
     const caps = (data.headline.replace(/[^A-Z]/g, '').length / lettersOnly.length) * 100;
@@ -320,6 +354,7 @@ function evaluateContent(data, sensationalWords) {
     }
   }
 
+  // 4. Bylines & Quotes
   if (data.hasByline) {
     score += 10;
     contentSignals.push({ icon: "✅", text: "Verified author/reporter byline present" });
