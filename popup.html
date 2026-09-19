@@ -2,70 +2,144 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>News Shield Nutrition Label</title>
-  <link rel="stylesheet" href="popup.css">
+  <title>News Shield</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      width: 360px;
+      margin: 0;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .header h1 {
+      font-size: 1.15rem;
+      margin: 0;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .status-pill {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+    .nutrition-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      margin-bottom: 14px;
+    }
+    .score-banner {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+    }
+    .score-title {
+      font-size: 0.8rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .score-val {
+      font-size: 1.4rem;
+      font-weight: 900;
+      color: #dc2626;
+    }
+    .section-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #64748b;
+      margin: 10px 0 6px 0;
+      display: flex;
+      justify-content: space-between;
+    }
+    .signal-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .signal-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 0.82rem;
+      padding: 4px 0;
+      color: #334155;
+      line-height: 1.35;
+    }
+    .signal-icon {
+      font-size: 0.9rem;
+      line-height: 1;
+      margin-top: 2px;
+    }
+    .btn-analyze {
+      width: 100%;
+      padding: 10px;
+      background: #2563eb;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-analyze:hover { background: #1d4ed8; }
+  </style>
 </head>
 <body>
-  <div class="card">
-    <header class="header">
-      <div class="brand">
-        <h1>News Shield</h1>
-        <span class="badge danger">High Risk</span>
-      </div>
-      <p class="subtitle">Content Analysis Nutrition Label</p>
-    </header>
 
-    <div class="meter-section">
-      <div class="meter-label">
-        <span>Credibility Score</span>
-        <span>24/100</span>
-      </div>
-      <div class="meter-bar">
-        <div class="meter-fill danger-fill" style="width: 24%;"></div>
-      </div>
-    </div>
-
-    <div class="signals-container">
-      <section class="signal-group">
-        <h2>Domain & Site Signals</h2>
-        <ul class="signal-list">
-          <li class="flag-item">Domain age &lt; 1 year (WHOIS check failed)</li>
-          <li class="flag-item">Domain name mimics a legitimate outlet (typosquatting)</li>
-          <li class="flag-item">Excessive pop-ups and aggressive ad density</li>
-        </ul>
-      </section>
-
-      <section class="signal-group">
-        <h2>Authorship</h2>
-        <ul class="signal-list">
-          <li class="flag-item">No byline or traceable published work</li>
-          <li class="flag-item">Single author publishing implausibly high volume</li>
-        </ul>
-      </section>
-
-      <section class="signal-group">
-        <h2>Content Analysis</h2>
-        <ul class="signal-list">
-          <li class="flag-item">Excessive/emotionally loaded language (e.g., "SHOCKING")</li>
-          <li class="flag-item">No cited sources (citation laundering loop detected)</li>
-          <li class="flag-item">Statistical claims with no linked data/study</li>
-        </ul>
-      </section>
-
-      <section class="signal-group">
-        <h2>Distribution & Virality</h2>
-        <ul class="signal-list">
-          <li class="flag-item">Disproportionate social shares (bot amplification pattern)</li>
-          <li class="flag-item">Comment section dominated by newly created profiles</li>
-        </ul>
-      </section>
-    </div>
-
-    <footer class="footer">
-      <button class="action-btn" id="inspect-btn">Inspect Highlights</button>
-      <button class="action-btn secondary" id="details-btn">View Full Report</button>
-    </footer>
+  <div class="header">
+    <h1>News Shield</h1>
+    <span class="status-pill">High Risk</span>
   </div>
+
+  <div class="nutrition-card">
+    <div class="score-banner">
+      <span class="score-title">Credibility Index</span>
+      <span class="score-val">24/100</span>
+    </div>
+
+    <div class="section-title">Domain & Site Signals</div>
+    <ul class="signal-list">
+      <li class="signal-item"><span class="signal-icon">⚠️</span> Domain age &lt; 1 year (WHOIS flagged)</li>
+      <li class="signal-item"><span class="signal-icon">⚠️</span> Lookalike name mimics major outlet</li>
+      <li class="signal-item"><span class="signal-icon">⚠️</span> High ad density &amp; redirect scripts</li>
+    </ul>
+
+    <div class="section-title">Authorship</div>
+    <ul class="signal-list">
+      <li class="signal-item"><span class="signal-icon">❌</span> No verifiable author or editorial page</li>
+      <li class="signal-item"><span class="signal-icon">⚠️</span> High-frequency syndication pattern</li>
+    </ul>
+
+    <div class="section-title">Content Analysis</div>
+    <ul class="signal-list">
+      <li class="signal-item"><span class="signal-icon">❌</span> Headline does not match article claims</li>
+      <li class="signal-item"><span class="signal-icon">⚠️</span> Sensational/emotionally loaded phrasing</li>
+      <li class="signal-item"><span class="signal-icon">❌</span> No direct primary citations found</li>
+    </ul>
+  </div>
+
+  <button class="btn-analyze" id="analyzeBtn">Analyze Current Page</button>
+
   <script src="popup.js"></script>
 </body>
 </html>
