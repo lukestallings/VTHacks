@@ -7,10 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!analyzeBtn) return;
 
   analyzeBtn.addEventListener('click', async () => {
-    // 1. Enter loading state
-    analyzeBtn.disabled = true;
-    analyzeBtn.innerText = "Analyzing page...";
-    if (statusEl) statusEl.innerText = "Scanning headline, language, and citations...";
+    // 1. Immediately reset metrics so you visually see the wipe
     if (scoreBox) {
       scoreBox.innerText = "--";
       scoreBox.style.color = "#64748b";
@@ -20,54 +17,76 @@ document.addEventListener('DOMContentLoaded', () => {
       riskBadge.className = "status-pill pill-warn";
     }
 
-    // 2. Query active tab
+    const sensationalEl = document.getElementById('sensationalCount');
+    if (sensationalEl) sensationalEl.innerText = "-";
+
+    const capsEl = document.getElementById('capsRatio');
+    if (capsEl) capsEl.innerText = "-";
+
+    const citationEl = document.getElementById('citationCount');
+    if (citationEl) citationEl.innerText = "-";
+
+    const securityEl = document.getElementById('securityStatus');
+    if (securityEl) securityEl.innerText = "-";
+
+    // 2. Lock button and start loading dots interval
+    analyzeBtn.disabled = true;
+    let dots = 0;
+    const intervalId = setInterval(() => {
+      dots = (dots + 1) % 4;
+      analyzeBtn.innerText = "Analyzing" + ".".repeat(dots);
+      if (statusEl) statusEl.innerText = "Scanning headline, language, and sources" + ".".repeat(dots);
+    }, 250);
+
+    const resetUI = () => {
+      clearInterval(intervalId);
+      analyzeBtn.disabled = false;
+      analyzeBtn.innerText = "Analyze Current Page";
+    };
+
+    // 3. Query the active tab
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (!tab || !tab.id) {
-      if (statusEl) statusEl.innerText = "Error: Cannot access tab.";
-      resetButton();
+      resetUI();
+      if (statusEl) statusEl.innerText = "Error: Cannot access active tab.";
       return;
     }
 
     if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('chrome-extension://'))) {
-      if (statusEl) statusEl.innerText = "Navigate to an actual article website first!";
-      resetButton();
+      resetUI();
+      if (statusEl) statusEl.innerText = "Navigate to a live article first!";
       return;
     }
 
-    try {
-      // 3. Short artificial delay (1.2 seconds) to display analysis in progress
-      await new Promise(resolve => setTimeout(resolve, 1200));
+    // 4. Force a visible 1.5-second timer
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
-      // 4. Inject DOM scraper
+    try {
+      // 5. Scrape DOM
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: scrapePageDirectly
       });
 
+      resetUI();
+
       if (!results || !results[0] || !results[0].result || !results[0].result.bodyText) {
-        if (statusEl) statusEl.innerText = "No readable article text detected.";
-        resetButton();
+        if (statusEl) statusEl.innerText = "No readable article text found on this page.";
         return;
       }
 
-      // 5. Score and render results
+      // 6. Score & display
       evaluateSignals(results[0].result);
       if (statusEl) statusEl.innerText = "Analysis complete.";
     } catch (err) {
       console.error(err);
+      resetUI();
       if (statusEl) statusEl.innerText = "Error scanning page. Reload tab and retry.";
-    } finally {
-      resetButton();
-    }
-
-    function resetButton() {
-      analyzeBtn.disabled = false;
-      analyzeBtn.innerText = "Analyze Current Page";
     }
   });
 });
 
-// Runs directly inside the target web page context
+// Runs directly inside the target webpage
 function scrapePageDirectly() {
   const headline = document.querySelector('h1')?.innerText?.trim() || document.title || "";
   const paragraphs = Array.from(document.querySelectorAll('article p, main p, p'))
@@ -77,7 +96,7 @@ function scrapePageDirectly() {
 
   const links = Array.from(document.querySelectorAll('article a, main a, p a'))
     .map(a => a.href)
-    .filter(href => href.startsWith('http'));
+    .filter(href => href && href.startsWith('http'));
 
   return {
     headline: headline,
@@ -88,7 +107,7 @@ function scrapePageDirectly() {
   };
 }
 
-// Computes heuristic scores based on content signals
+// Computes scores based on text & meta signals
 function evaluateSignals(data) {
   let score = 100;
 
