@@ -1,14 +1,26 @@
 {
   "manifest_version": 3,
-  "name": "NewsShield - Credibility Analyzer",
+  "name": "Klarity: Content Analysis Engine",
   "version": "1.0",
-  "description": "Analyzes online news articles for credibility signals and sensationalism.",
+  "description": "Analyze web content for signals of disinformation using the Nutrition Label UI.",
   "permissions": [
     "activeTab",
     "scripting"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Analyze Article"
-  }
+    "default_icon": "klarity-logo.svg"
+  },
+  "icons": {
+    "128": "klarity-logo.svg"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ]
 }
