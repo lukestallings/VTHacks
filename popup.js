@@ -240,6 +240,23 @@ function scrapePageData() {
     return aboutKeywords.some(kw => text === kw || href.includes(kw.replace(/\s+/g, '-')) || href.includes(kw.replace(/\s+/g, '')));
   });
 
+  // --- Ad Density & Autoplay Detection ---
+  const adSelectors = [
+    'iframe[src*="doubleclick"]',
+    'iframe[src*="googlesyndication"]',
+    'div[id*="google_ads"]',
+    'div[class*="ad-slot"]',
+    'div[class*="ad-banner"]',
+    'div[class*="adsbygoogle"]',
+    'div[id*="taboola"]',
+    'div[id*="outbrain"]',
+    '.trc_rbox_container'
+  ];
+  const detectedAds = document.querySelectorAll(adSelectors.join(','));
+  const adCount = detectedAds.length;
+
+  const hasAutoplayVideo = !!document.querySelector('video[autoplay], video[data-autoplay]');
+
   const quotesCount = (bodyText.match(/"([^"]{10,})"/g) || []).length;
   const hasByline = !!(
     document.querySelector('[rel="author"]') ||
@@ -251,15 +268,17 @@ function scrapePageData() {
     hostname: currentHost,
     headline: headline,
     bodyText: bodyText,
+    paragraphCount: paragraphs.length,
     isHttps: window.location.protocol === 'https:',
     externalLinksCount: externalLinks.length,
     quotesCount: quotesCount,
     hasByline: hasByline,
-    hasAboutOrTeamLink: hasAboutOrTeamLink
+    hasAboutOrTeamLink: hasAboutOrTeamLink,
+    adCount: adCount,
+    hasAutoplayVideo: hasAutoplayVideo
   };
 }
 
-// Levenshtein distance for typosquatting detection
 function levenshteinDistance(a, b) {
   const dp = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
   for (let i = 0; i <= a.length; i++) dp[i][0] = i;
@@ -280,16 +299,15 @@ function levenshteinDistance(a, b) {
 function checkTyposquatting(currentDomain, trustedList) {
   const parts = currentDomain.split('.');
   const root = parts.length > 2 ? parts.slice(-2).join('.') : currentDomain;
-  const rootName = root.split('.')[0]; // e.g. "reutrs" from "reutrs.com"
+  const rootName = root.split('.')[0];
 
   for (const trusted of trustedList) {
     if (root === trusted || currentDomain.endsWith('.' + trusted)) {
-      return null; // Legitimate exact match
+      return null;
     }
 
     const trustedName = trusted.split('.')[0];
 
-    // 1. Edit distance check (1 or 2 typos on names with >= 4 characters)
     if (trustedName.length >= 4) {
       const dist = levenshteinDistance(rootName, trustedName);
       if (dist >= 1 && dist <= 2) {
@@ -297,7 +315,6 @@ function checkTyposquatting(currentDomain, trustedList) {
       }
     }
 
-    // 2. Deceptive embedding check (e.g. bbc-breaking-news.com or nytimes-updates.com)
     if (rootName.includes(trustedName) && rootName !== trustedName) {
       return { type: "deceptive_name", target: trusted };
     }
@@ -327,7 +344,7 @@ function evaluateContent(data, sensationalWords) {
     score += 25;
     domainSignals.push({ icon: "🏛️", text: "Verified official government domain (.gov)" });
   } else if (typosquatMatch) {
-    score -= 40; // Critical warning
+    score -= 40;
     domainSignals.push({ 
       icon: "🚨", 
       text: `Potential typosquatting impersonating ${typosquatMatch.target}` 
@@ -381,11 +398,31 @@ function evaluateContent(data, sensationalWords) {
     domainSignals.push({ icon: "⚠️", text: "No transparent About Us or Masthead link found" });
   }
 
+  // Protocol Check
   if (data.isHttps) {
     domainSignals.push({ icon: "🔒", text: "Secure encrypted protocol (HTTPS)" });
   } else {
     score -= 25;
     domainSignals.push({ icon: "⚠️", text: "Insecure protocol connection (HTTP)" });
+  }
+
+  // Ad Density & Farm Signals
+  if (data.adCount >= 6 || (data.paragraphCount > 0 && data.adCount / data.paragraphCount > 1.2)) {
+    score -= 20;
+    domainSignals.push({ 
+      icon: "⚠️", 
+      text: `Aggressive ad density detected (${data.adCount} ad units/widgets)` 
+    });
+  } else if (data.adCount >= 3) {
+    score -= 5;
+    domainSignals.push({ icon: "ℹ️", text: `Moderate advertising density (${data.adCount} units)` });
+  } else {
+    domainSignals.push({ icon: "✅", text: "Clean reading layout (low ad intrusion)" });
+  }
+
+  if (data.hasAutoplayVideo) {
+    score -= 10;
+    domainSignals.push({ icon: "⚠️", text: "Intrusive autoplay video player present" });
   }
 
   // 2. Sensational Words
