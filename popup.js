@@ -1,32 +1,68 @@
-document.getElementById('analyzeBtn').addEventListener('click', async () => {
-  const statusEl = document.getElementById('status');
-  statusEl.innerText = "Analyzing article content...";
+document.addEventListener('DOMContentLoaded', () => {
+  const analyzeBtn = document.getElementById('analyzeBtn');
+  if (!analyzeBtn) return;
 
-  // 1. Get current active tab
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  analyzeBtn.addEventListener('click', async () => {
+    const statusEl = document.getElementById('status');
+    statusEl.innerText = "Analyzing article content...";
 
-  if (!tab || !tab.id) {
-    statusEl.innerText = "Error: Cannot access tab.";
-    return;
-  }
+    // 1. Get current active tab
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-  // 2. Inject content script if not already injected
-  await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    files: ['content.js']
-  });
-
-  // 3. Ask content script for page data
-  chrome.tabs.sendMessage(tab.id, { action: "SCRAPE_PAGE" }, (response) => {
-    if (!response || !response.bodyText) {
-      statusEl.innerText = "No article text detected on this page.";
+    if (!tab || !tab.id) {
+      statusEl.innerText = "Error: Cannot access tab.";
       return;
     }
 
-    evaluateSignals(response);
-    statusEl.innerText = "Analysis complete.";
+    // Prevent running on internal browser pages
+    if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('chrome-extension://')) {
+      statusEl.innerText = "Navigate to an actual article website first!";
+      return;
+    }
+
+    try {
+      // 2. Inject and execute the scraper function directly
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: scrapePageDirectly
+      });
+
+      if (!results || !results[0] || !results[0].result || !results[0].result.bodyText) {
+        statusEl.innerText = "No article text detected on this page.";
+        return;
+      }
+
+      evaluateSignals(results[0].result);
+      statusEl.innerText = "Analysis complete.";
+    } catch (err) {
+      console.error(err);
+      statusEl.innerText = "Error scanning page. Reload tab and retry.";
+    }
   });
 });
+
+// Runs inside the webpage context
+function scrapePageDirectly() {
+  const headline = document.querySelector('h1')?.innerText || document.title || "";
+  
+  const paragraphs = Array.from(document.querySelectorAll('article p, main p, p'))
+    .map(p => p.innerText.trim())
+    .filter(text => text.length > 20);
+
+  const fullText = paragraphs.join(" ");
+
+  const links = Array.from(document.querySelectorAll('article a, main a, p a'))
+    .map(a => a.href)
+    .filter(href => href && href.startsWith('http'));
+
+  return {
+    url: window.location.href,
+    isHttps: window.location.protocol === 'https:',
+    headline: headline,
+    bodyText: fullText,
+    linkCount: links.length
+  };
+}
 
 function evaluateSignals(data) {
   const text = data.bodyText;
@@ -35,7 +71,8 @@ function evaluateSignals(data) {
   // 1. Sensational buzzwords check
   const sensationalWordList = [
     'shocking', 'unbelievable', 'you won\'t believe', 'secret they don\'t want',
-    'mind-blowing', 'exposed', 'conspiracy', 'miracle cure', 'urgent alert'
+    'mind-blowing', 'exposed', 'conspiracy', 'miracle cure', 'urgent alert',
+    'banned', 'they don\'t want you to know'
   ];
   let sensationalHits = 0;
   sensationalWordList.forEach(word => {
@@ -44,7 +81,7 @@ function evaluateSignals(data) {
     if (matches) sensationalHits += matches.length;
   });
 
-  // 2. ALL CAPS ratio check
+  // 2. ALL CAPS ratio
   const lettersOnly = text.replace(/[^a-zA-Z]/g, '');
   const upperCaseOnly = lettersOnly.replace(/[^A-Z]/g, '');
   const capsPercent = lettersOnly.length > 0 ? (upperCaseOnly.length / lettersOnly.length) * 100 : 0;
@@ -52,15 +89,11 @@ function evaluateSignals(data) {
   // 3. Link/Citation count
   const citations = data.linkCount;
 
-  // 4. Calculate a starter Credibility Score (0 to 100)
-  let score = 85; // Base default
-
-  // Deductions
+  // 4. Calculate starter score (0-100)
+  let score = 85;
   score -= Math.min(sensationalHits * 8, 30);
   if (capsPercent > 12) score -= 15;
   if (!data.isHttps) score -= 20;
-
-  // Boost for citations
   if (citations >= 3) score += 10;
   if (citations === 0) score -= 15;
 
@@ -68,11 +101,26 @@ function evaluateSignals(data) {
 
   // Update UI elements
   const scoreBox = document.getElementById('scoreBox');
+  const riskBadge = document.getElementById('riskBadge');
+
   scoreBox.innerText = `${score}/100`;
-  scoreBox.className = "score-badge " + (score >= 70 ? 'score-good' : score >= 45 ? 'score-warn' : 'score-bad');
+
+  if (score >= 70) {
+    scoreBox.style.color = "#15803d";
+    riskBadge.innerText = "Low Risk";
+    riskBadge.className = "status-pill pill-good";
+  } else if (score >= 45) {
+    scoreBox.style.color = "#a16207";
+    riskBadge.innerText = "Moderate";
+    riskBadge.className = "status-pill pill-warn";
+  } else {
+    scoreBox.style.color = "#dc2626";
+    riskBadge.innerText = "High Risk";
+    riskBadge.className = "status-pill pill-bad";
+  }
 
   document.getElementById('sensationalCount').innerText = `${sensationalHits} flagged`;
   document.getElementById('capsRatio').innerText = `${capsPercent.toFixed(1)}%`;
   document.getElementById('citationCount').innerText = `${citations} links`;
-  document.getElementById('securityStatus').innerText = data.isHttps ? "HTTPS (Secure)" : "HTTP (Insecure)";
+  document.getElementById('securityStatus').innerText = data.isHttps ? "HTTPS" : "Insecure (HTTP)";
 }
